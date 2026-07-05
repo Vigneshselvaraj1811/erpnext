@@ -1854,6 +1854,27 @@ class update_entries_after:
 
 			frappe.db.set_value("Bin", bin_name, updated_values, update_modified=True)
 
+		for item_code in {ic for ic, _ in self.prev_sle_dict}:
+			_update_item_valuation_rate(item_code)
+
+
+def _update_item_valuation_rate(item_code: str) -> None:
+	"""Update Item.valuation_rate with weighted average rate from all Bins."""
+	bins = frappe.get_all(
+		"Bin",
+		filters={"item_code": item_code, "actual_qty": [">", 0]},
+		fields=["actual_qty", "valuation_rate"],
+	)
+	if not bins:
+		return
+
+	total_qty = sum(flt(b.actual_qty) for b in bins)
+	total_value = sum(flt(b.actual_qty) * flt(b.valuation_rate) for b in bins)
+
+	if total_qty:
+		avg_rate = flt(total_value / total_qty, 6)
+		frappe.db.set_value("Item", item_code, "valuation_rate", avg_rate, update_modified=False)
+
 
 def get_sle_against_current_voucher(kwargs):
 	kwargs["posting_datetime"] = get_combine_datetime(kwargs.posting_date, kwargs.posting_time)
